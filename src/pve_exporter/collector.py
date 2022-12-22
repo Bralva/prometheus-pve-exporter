@@ -31,6 +31,14 @@ class StatusCollector:
     pve_up{id="cluster/pvec"} 1.0
     pve_up{id="lxc/101"} 1.0
     pve_up{id="qemu/102"} 1.0
+
+    Collects Proxmox VE VM status lock
+
+    # HELP pve_lock VM status lock
+    # TYPE pve_lock gauge
+    pve_lock{id="qemu/101",lock="migrate"} 1.0
+    pve_lock{id="qemu/102",lock="backup"} 1.0
+    pve_lock{id="qemu/102",lock="none"} 0.0
     """
 
     def __init__(self, pve):
@@ -41,6 +49,11 @@ class StatusCollector:
             'pve_up',
             'Node/VM/CT-Status is online/running',
             labels=['id'])
+
+        lock_metrics = GaugeMetricFamily(
+            'pve_lock',
+            'VM status lock (backup, migrate..)',
+            labels=['id', 'lock'])
 
         for entry in self._pve.cluster.status.get():
             if entry['type'] == 'node':
@@ -56,8 +69,15 @@ class StatusCollector:
             label_values = [resource['id']]
             status_metrics.add_metric(label_values, resource['status'] == 'running')
 
-        yield status_metrics
+            if 'lock' in resource:
+                label_values = [resource['id'],resource['lock']]
+                lock_metrics.add_metric(label_values, True)
+            else:
+                label_values = [resource['id'],'none']
+                lock_metrics.add_metric(label_values, False)
 
+        yield status_metrics
+        yield lock_metrics
 class VersionCollector:
     """
     Collects Proxmox VE build information. E.g.:
